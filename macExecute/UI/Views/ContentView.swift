@@ -276,6 +276,7 @@ struct ContentView: View {
             }
             
             
+            /*
             ZSigner.sign(withAppPath: appPath.path, prov: nil, key: self.certificate, pass: password) { cool, error in
                 print(error)
                 print(cool)
@@ -292,6 +293,15 @@ struct ContentView: View {
                 // Clean up temporary files
                 try? FileManager.default.removeItem(atPath: patchedPath)
             }
+            */
+            logMessage("Loading dylib from: \(patchedPath)")
+            
+            // Execute with proper error handling
+            let result = loadAndExecuteMain(from: patchedPath)
+            logMessage("Execution completed with result: \(result)")
+            
+            // Clean up temporary files
+            try? FileManager.default.removeItem(atPath: patchedPath)
             
         } catch {
             logMessage("Error during app processing: \(error.localizedDescription)")
