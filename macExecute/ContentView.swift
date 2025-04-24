@@ -271,7 +271,7 @@ struct ContentView: View {
             }
             
             
-            ZSigner.sign(withAppPath: exportedAppPath, prov: (try? Data(contentsOf: URL(string: exportedAppPath)!.appendingPathComponent("embedded.mobileprovision"))), key: self.certificate, pass: password) { cool, error in
+            ZSigner.sign(withAppPath: appPath.path, prov: nil, key: self.certificate, pass: password) { cool, error in
                 print(error)
                 print(cool)
                 
