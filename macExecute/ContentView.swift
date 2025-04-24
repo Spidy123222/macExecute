@@ -270,7 +270,8 @@ struct ContentView: View {
                 return
             }
             
-            ZSigner.sign(withAppPath: exportedAppPath, prov: nil, key: self.certificate, pass: password) { cool, error in
+            
+            ZSigner.sign(withAppPath: exportedAppPath, prov: (try? Data(contentsOf: URL(string: exportedAppPath)!.appendingPathComponent("embedded.mobileprovision"))), key: self.certificate, pass: password) { cool, error in
                 print(error)
                 print(cool)
                 
@@ -280,7 +281,7 @@ struct ContentView: View {
                 logMessage("Loading dylib from: \(dylibURL.path)")
                 
                 // Execute with proper error handling
-                let result = loadAndExecuteMain(from: appURL.appendingPathComponent("patched_exec.dylib").path)
+                let result = loadAndExecuteMain(from: appURL.appendingPathComponent("Frameworks").appendingPathComponent("patched_exec.dylib").path)
                 logMessage("Execution completed with result: \(result)")
                 
                 // Clean up temporary files
@@ -339,37 +340,64 @@ func createMinimalIOSAppBundle(outputPath: String, dylibPath: String? = nil) -> 
     let fileManager = FileManager.default
     
     do {
-        let bundleURL = URL(fileURLWithPath: outputPath)
+        // Get current bundle
+        let currentBundle = Bundle.main.bundleURL
         
-        if fileManager.fileExists(atPath: bundleURL.path) {
-            try fileManager.removeItem(at: bundleURL)
+        // Create temporary directory for the minimal bundle
+        let tempBundlePath = URL(fileURLWithPath: outputPath)
+        
+        // Remove if exists
+        if fileManager.fileExists(atPath: tempBundlePath.path) {
+            try fileManager.removeItem(at: tempBundlePath)
         }
         
-        try fileManager.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+        // Create bundle directory structure
+        try fileManager.createDirectory(at: tempBundlePath, withIntermediateDirectories: true)
         
-        let currentBundle = Bundle.main.bundleURL
+        // Setup paths
+        let executableName = Bundle.main.executableURL?.lastPathComponent ?? "Unknown"
+        
+        // Copy Info.plist
         let sourcePlist = currentBundle.appendingPathComponent("Info.plist")
-        let destPlist = bundleURL.appendingPathComponent("Info.plist")
-        try fileManager.copyItem(at: sourcePlist, to: destPlist)
+        let destPlist = tempBundlePath.appendingPathComponent("Info.plist")
+        if fileManager.fileExists(atPath: sourcePlist.path) {
+            try fileManager.copyItem(at: sourcePlist, to: destPlist)
+        }
         
         // Copy executable
-        if let executableName = Bundle.main.executableURL?.lastPathComponent {
-            let sourceExec = currentBundle.appendingPathComponent(executableName)
-            let destExec = bundleURL.appendingPathComponent(executableName)
+        let sourceExec = currentBundle.appendingPathComponent(executableName)
+        let destExec = tempBundlePath.appendingPathComponent(executableName)
+        if fileManager.fileExists(atPath: sourceExec.path) {
+            try fileManager.copyItem(at: sourceExec, to: destExec)
+            try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destExec.path)
+        }
+        
+        // Create Frameworks directory and add dylib if provided
+        if let dylibPath = dylibPath {
+            // Create Frameworks directory
+            let frameworksDir = tempBundlePath.appendingPathComponent("Frameworks")
+            try fileManager.createDirectory(at: frameworksDir, withIntermediateDirectories: true)
             
-            if let dylibPath = dylibPath {
-                let dylibURL = URL(fileURLWithPath: dylibPath)
-                
-                try fileManager.copyItem(at: dylibURL, to: destExec)
-                try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destExec.path)
-                
-                NSLog("Added dylib \(dylibURL.lastPathComponent) to Frameworks directory")
+            // Get dylib file URL
+            let dylibURL = URL(fileURLWithPath: dylibPath)
+            let dylibName = dylibURL.lastPathComponent
+            let destDylibPath = frameworksDir.appendingPathComponent(dylibName)
+            
+            // Copy dylib to Frameworks directory
+            if fileManager.fileExists(atPath: dylibPath) {
+                try fileManager.copyItem(at: dylibURL, to: destDylibPath)
+                try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destDylibPath.path)
+                print("Added dylib \(dylibName) to Frameworks directory")
+            } else {
+                print("Warning: Dylib not found at path: \(dylibPath)")
             }
         }
         
-        return bundleURL
+        print("Created minimal iOS app bundle at: \(tempBundlePath.path)")
+        return tempBundlePath
+        
     } catch {
-        NSLog("Error creating iOS app bundle: \(error)")
+        print("Error creating minimal iOS app bundle: \(error)")
         return nil
     }
 }
