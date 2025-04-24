@@ -35,21 +35,21 @@ class LogCapture {
 
     func startCapturing() {
         stdoutPipe = Pipe()
-        stderrPipe = Pipe()
+        // stderrPipe = Pipe()
 
         redirectOutput(to: stdoutPipe!, fileDescriptor: STDOUT_FILENO)
-        redirectOutput(to: stderrPipe!, fileDescriptor: STDERR_FILENO)
+        // redirectOutput(to: stderrPipe!, fileDescriptor: STDERR_FILENO)
 
         setupReadabilityHandler(for: stdoutPipe!, isStdout: true)
-        setupReadabilityHandler(for: stderrPipe!, isStdout: false)
+        // setupReadabilityHandler(for: stderrPipe!, isStdout: false)
     }
 
     func stopCapturing() {
         dup2(originalStdout, STDOUT_FILENO)
-        dup2(originalStderr, STDERR_FILENO)
+        // dup2(originalStderr, STDERR_FILENO)
 
         stdoutPipe?.fileHandleForReading.readabilityHandler = nil
-        stderrPipe?.fileHandleForReading.readabilityHandler = nil
+        // stderrPipe?.fileHandleForReading.readabilityHandler = nil
     }
 
     private func redirectOutput(to pipe: Pipe, fileDescriptor: Int32) {
@@ -132,7 +132,12 @@ struct ContentView: View {
     @State private var statusMessage = "Tap to select executable"
     @AppStorage("certificate") private var certificate: Data?
     @AppStorage("password") private var password: String?
+    @State var textinput = ""
     @StateObject private var logsModel = LogViewModel()
+    
+    @StateObject private var runner = DylibMainRunner.shared
+    
+    @State private var hideButtons = false
     
     init() {
         setenv("LC_HOME_PATH", getenv("HOME"), 1)
@@ -163,35 +168,47 @@ struct ContentView: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             
-            // Main action button
-            Button(action: {
-                if certificate == nil || password == nil {
-                    let url = URL(string: "sidestore://certificate?callback_template=macexecute%3A%2F%2Fcertificate%3Fcert%3D%24%28BASE64_CERT%29%26password%3D%24%28PASSWORD%29")
-                    if let url {
-                        UIApplication.shared.open(url)
+            TextInputView()
+                .contextMenu() {
+                    Button {
+                        hideButtons.toggle()
+                    } label: {
+                        Text(hideButtons ? "Show Buttons" : "Hide Buttons")
                     }
-                } else {
-                    showFileImporter = true
                 }
-            }) {
-                Text(statusMessage)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-            }
             
-            // Reset credentials button
-            Button(action: {
-                certificate = nil
-                password = nil
-                statusMessage = "Tap to select executable"
-            }) {
-                Text("Reset Credentials")
-                    .padding()
-                    .background(Color.red)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
+            // Main action button
+            if !hideButtons {
+                Button(action: {
+                    if certificate == nil || password == nil {
+                        let url = URL(string: "sidestore://certificate?callback_template=macexecute%3A%2F%2Fcertificate%3Fcert%3D%24%28BASE64_CERT%29%26password%3D%24%28PASSWORD%29")
+                        if let url {
+                            UIApplication.shared.open(url)
+                        }
+                    } else {
+                        showFileImporter = true
+                    }
+                }) {
+                    Text(statusMessage)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
+                
+                
+                // Reset credentials button
+                Button(action: {
+                    certificate = nil
+                    password = nil
+                    statusMessage = "Tap to select executable"
+                }) {
+                    Text("Reset Credentials")
+                        .padding()
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
             }
         }
         .padding()
@@ -202,6 +219,8 @@ struct ContentView: View {
             handleFileImport(result)
         }
     }
+    
+    
     
     private func handleIncomingURL(_ url: URL) {
         guard url.host == "certificate" else { return }
@@ -297,11 +316,13 @@ struct ContentView: View {
             logMessage("Loading dylib from: \(patchedPath)")
             
             // Execute with proper error handling
-            let result = loadAndExecuteMain(from: patchedPath)
+            
+            
+            let result = runner.run(dylibPath: patchedPath)
             logMessage("Execution completed with result: \(result)")
             
             // Clean up temporary files
-            try? FileManager.default.removeItem(atPath: patchedPath)
+            // try? FileManager.default.removeItem(atPath: patchedPath)
             
         } catch {
             logMessage("Error during app processing: \(error.localizedDescription)")

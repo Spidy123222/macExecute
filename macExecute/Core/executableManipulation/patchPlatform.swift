@@ -10,7 +10,7 @@ import Foundation
 import MachO
 
 func patchExecutable(origPath: String, targetPlatform: UInt32) -> String? {
-    let tempDirectory = NSTemporaryDirectory()
+    let tempDirectory = URL.documentsDirectory.path
     let tempPath = (tempDirectory as NSString).appendingPathComponent("patched_exec.dylib")
 
     do {
