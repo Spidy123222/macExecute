@@ -4,3 +4,4 @@
 
 #include "execApp.h"
 #import "ZSign/zsigner.h"
+#import "utils.h"

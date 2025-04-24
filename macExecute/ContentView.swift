@@ -134,6 +134,11 @@ struct ContentView: View {
     @AppStorage("password") private var password: String?
     @StateObject private var logsModel = LogViewModel()
     
+    init() {
+        setenv("LC_HOME_PATH", getenv("HOME"), 1)
+        init_bypassDyldLibValidation()
+    }
+    
     var body: some View {
         VStack(spacing: 16) {
             // Log display section
