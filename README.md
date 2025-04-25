@@ -33,6 +33,7 @@
 
 - `TestApp` (included in the repo)  
 - `zsh` (barely functional; only built-in commands work)
+- `fastfetch` (works perfectly but needs a fork to remove OpenGL and OpenCL and patch some other stuff)
 
 ---
 
