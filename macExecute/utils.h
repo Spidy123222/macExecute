@@ -1,6 +1,15 @@
 #import <Foundation/Foundation.h>
 #include <mach-o/loader.h>
 #include <objc/runtime.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <mach-o/loader.h>
 
 const char **_CFGetProgname(void);
 const char **_CFGetProcessPath(void);

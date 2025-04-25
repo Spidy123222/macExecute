@@ -8,9 +8,26 @@
 
 /* Begin PBXBuildFile section */
 		4E10338B2DB9DCE100BF7C06 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = 4E10338A2DB9DCE100BF7C06 /* OpenSSL */; };
+		4EEDD05E2DBB047100F5DBAC /* MachOKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4EEDD05D2DBB047100F5DBAC /* MachOKit */; };
+		4EEDD0602DBB047100F5DBAC /* MachOKitC in Frameworks */ = {isa = PBXBuildFile; productRef = 4EEDD05F2DBB047100F5DBAC /* MachOKitC */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		4E59D4DD2DBA7674009CEE71 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		4E59D5062DBA7BB8009CEE71 /* CoreWLAN.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreWLAN.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/CoreWLAN.framework; sourceTree = DEVELOPER_DIR; };
+		4E59D5E32DBA87CD009CEE71 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		4EEFAB692DB7A2060090586F /* macExecute.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = macExecute.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -24,11 +41,25 @@
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		4EEDD0642DBB1AF200F5DBAC /* Exceptions for "macExecute" folder in "Embed Frameworks" phase from "macExecute" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			attributesByRelativePath = {
+				Core/Dependencies/libpcre.1.dylib = (CodeSignOnCopy, );
+			};
+			buildPhase = 4E59D4DD2DBA7674009CEE71 /* Embed Frameworks */;
+			membershipExceptions = (
+				Core/Dependencies/libpcre.1.dylib,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		4EEFAB6B2DB7A2060090586F /* macExecute */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				4E1032382DB9C1A500BF7C06 /* Exceptions for "macExecute" folder in "macExecute" target */,
+				4EEDD0642DBB1AF200F5DBAC /* Exceptions for "macExecute" folder in "Embed Frameworks" phase from "macExecute" target */,
 			);
 			path = macExecute;
 			sourceTree = "<group>";
@@ -40,6 +71,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4EEDD05E2DBB047100F5DBAC /* MachOKit in Frameworks */,
+				4EEDD0602DBB047100F5DBAC /* MachOKitC in Frameworks */,
 				4E10338B2DB9DCE100BF7C06 /* OpenSSL in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -50,6 +83,8 @@
 		4E1031632DB9B87D00BF7C06 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				4E59D5E32DBA87CD009CEE71 /* CoreGraphics.framework */,
+				4E59D5062DBA7BB8009CEE71 /* CoreWLAN.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -81,6 +116,7 @@
 				4EEFAB652DB7A2060090586F /* Sources */,
 				4EEFAB662DB7A2060090586F /* Frameworks */,
 				4EEFAB672DB7A2060090586F /* Resources */,
+				4E59D4DD2DBA7674009CEE71 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -92,6 +128,8 @@
 			name = macExecute;
 			packageProductDependencies = (
 				4E10338A2DB9DCE100BF7C06 /* OpenSSL */,
+				4EEDD05D2DBB047100F5DBAC /* MachOKit */,
+				4EEDD05F2DBB047100F5DBAC /* MachOKitC */,
 			);
 			productName = macExecute;
 			productReference = 4EEFAB692DB7A2060090586F /* macExecute.app */;
@@ -124,6 +162,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				4E1033892DB9DCE100BF7C06 /* XCRemoteSwiftPackageReference "OpenSSL" */,
+				4EEDD05C2DBB047100F5DBAC /* XCRemoteSwiftPackageReference "MachOKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4EEFAB6A2DB7A2060090586F /* Products */;
@@ -288,6 +327,10 @@
 				DEVELOPMENT_TEAM = 95J8WZ4TN8;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/macExecute/Core/Dependencies",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = macExecute/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -299,6 +342,10 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/macExecute/Core/Dependencies",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;
@@ -329,6 +376,10 @@
 				DEVELOPMENT_TEAM = 95J8WZ4TN8;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/macExecute/Core/Dependencies",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = macExecute/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -340,6 +391,10 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/macExecute/Core/Dependencies",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;
@@ -388,6 +443,14 @@
 				minimumVersion = 3.3.3001;
 			};
 		};
+		4EEDD05C2DBB047100F5DBAC /* XCRemoteSwiftPackageReference "MachOKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/p-x9/MachOKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.30.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -395,6 +458,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4E1033892DB9DCE100BF7C06 /* XCRemoteSwiftPackageReference "OpenSSL" */;
 			productName = OpenSSL;
+		};
+		4EEDD05D2DBB047100F5DBAC /* MachOKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4EEDD05C2DBB047100F5DBAC /* XCRemoteSwiftPackageReference "MachOKit" */;
+			productName = MachOKit;
+		};
+		4EEDD05F2DBB047100F5DBAC /* MachOKitC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4EEDD05C2DBB047100F5DBAC /* XCRemoteSwiftPackageReference "MachOKit" */;
+			productName = MachOKitC;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

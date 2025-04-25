@@ -8,6 +8,7 @@
 import Foundation
 import Darwin
 import MachO
+import MachOKit
 
 func OSSwapInt32(_ cool: UInt32) -> UInt32 {
     cool.byteSwapped
@@ -65,8 +66,63 @@ func parseMachO(path: UnsafePointer<CChar>, callback: ParseMachOCallback) -> Str
     return nil
 }
 
+
+
+@discardableResult
+func replacePatternInFile(at filePath: String, pattern: String, replacement: String) -> Bool {
+    // Check if the file exists
+    if !FileManager.default.fileExists(atPath: filePath) {
+        print("File does not exist at path: \(filePath)")
+        return false
+    }
+    
+    do {
+        // Read the binary file content as Data
+        let fileData = try Data(contentsOf: URL(fileURLWithPath: filePath))
+        
+        // Convert the pattern and replacement strings to Data using UTF-8 encoding
+        guard let patternData = pattern.data(using: .utf8),
+              let replacementData = replacement.data(using: .utf8) else {
+            print("Failed to convert strings to data.")
+            return false
+        }
+        
+        // Create a mutable copy of the file data
+        var modifiedData = fileData
+        
+        // Find all occurrences of the pattern
+        var currentIndex = 0
+        while let range = modifiedData.range(of: patternData, options: [], in: currentIndex..<modifiedData.count) {
+            let patternLength = range.upperBound - range.lowerBound
+            let replacementLength = replacementData.count
+            
+            // If the replacement is shorter, pad with zeroes (to maintain the structure like a Mach-O file)
+            if replacementLength < patternLength {
+                modifiedData.replaceSubrange(range, with: replacementData + Data(repeating: 0, count: patternLength - replacementLength))
+            } else {
+                // If the replacement is longer, just replace it (you'll need to handle Mach-O specifics here)
+                modifiedData.replaceSubrange(range, with: replacementData)
+            }
+            
+            // Move to the next part of the data
+            currentIndex = range.upperBound
+        }
+        
+        // Write the modified binary data back to the file
+        try modifiedData.write(to: URL(fileURLWithPath: filePath))
+        print("File successfully modified.")
+        return true
+    } catch {
+        print("Error reading or writing the file: \(error)")
+        return false
+    }
+}
+
+
 func patchMachO(path: String) {
     var has64bitSlice = false
+    
+   //  getSymbols(path)
     
     let error = parseMachO(path: path.cString(using: .utf8)!) { path, header, fd, filePtr in
         if header.pointee.cputype == CPU_TYPE_ARM64 {
@@ -75,6 +131,7 @@ func patchMachO(path: String) {
         }
     }
 }
+
 
 func patchExecSlice(path: UnsafePointer<CChar>, header: UnsafeMutablePointer<mach_header_64>, doInject: Bool) {
     let imageHeaderPtr = UnsafeMutableRawPointer(header).advanced(by: MemoryLayout<mach_header_64>.size)

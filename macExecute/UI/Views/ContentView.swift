@@ -10,6 +10,7 @@ import Darwin
 import MachO
 import SwiftUI
 import UIKit
+import MachOKit
 
 class LogCapture {
     static let shared = LogCapture()
@@ -253,6 +254,9 @@ struct ContentView: View {
         }
     }
     
+    
+
+    
     private func processSelectedFile(_ fileURL: URL) {
         logMessage("Processing file: \(fileURL.lastPathComponent)")
         
@@ -263,12 +267,13 @@ struct ContentView: View {
                 fileURL.stopAccessingSecurityScopedResource()
             }
         }
-        
         // Step 1: Patch executable to make it a dylib
         guard let patchedPath = patchExecutable(origPath: fileURL.path, targetPlatform: UInt32(PLATFORM_IOS)) else {
             logMessage("Failed to patch executable")
             return
         }
+        
+        replacePatternInFile(at: patchedPath, pattern: "/usr/lib/libpcre.0.dylib", replacement: "@rpath/libpcre.1.dylib")
         
         patchMachO(path: patchedPath)
         logMessage("Successfully patched executable")

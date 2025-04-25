@@ -16,6 +16,5 @@
 #define MH_EXECUTE 0x2
 #define MH_DYLIB   0x6
 
-
 #import "ZSign/zsigner.h"
 #import "utils.h"

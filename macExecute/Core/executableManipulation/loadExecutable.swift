@@ -8,6 +8,7 @@
 import Foundation
 import Darwin
 import MachO
+import MachOKit
 
 class DylibMainRunner: ObservableObject {
     private var dylibHandle: UnsafeMutableRawPointer?
@@ -54,6 +55,7 @@ class DylibMainRunner: ObservableObject {
             return false
         }
         
+        
         let symbols = ["main", "_main", "start", "_start", "entry", "_entry"]
         var entrySymbol: UnsafeMutableRawPointer?
         
@@ -70,12 +72,22 @@ class DylibMainRunner: ObservableObject {
             return false
         }
         
+        var shellEnv = "zsh"
+        var homeEnv = URL.homeDirectory  // Or set this to a valid path
+        var pathEnv = "/bin:/usr/bin:/usr/local/bin"  // Or set this to an appropriate path
+        var termEnv = "xterm-256color"  // Or set this to a terminal type you prefer
+        
         typealias EntryFunc = @convention(c) (Int32, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Int32
         let entry = unsafeBitCast(symbol, to: EntryFunc.self)
         
         progName = strdup(dylibPath)
-        var argv: [UnsafeMutablePointer<CChar>?] = [progName, nil]
-        var envp: [UnsafeMutablePointer<CChar>?] = [nil]
+        var argv: [UnsafeMutablePointer<CChar>?] = [progName]
+        var envp: [UnsafeMutablePointer<CChar>?] = [
+            strdup("SHELL=\(shellEnv)"),
+            strdup("HOME=\(homeEnv)"),
+            strdup("PATH=\(pathEnv)"),
+            strdup("TERM=\(termEnv)"),
+        ]
         let argc: Int32 = 1
         
         DispatchQueue.global(qos: .userInteractive).async {
