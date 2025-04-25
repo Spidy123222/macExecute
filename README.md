@@ -13,7 +13,7 @@
 
 **Will this run [Insert App Here]?**  
 - Probably not. iOS is missing many libraries, functions and frameworks that most CLI apps depend on.
-    - even if the library / framework exists, some functions that the binary may try to use will not be in the iOS version of that library
+    - Even if a library or framework exists on iOS, differences in implementation between the macOS and iOS versions can cause compatibility issues and lead to application failures
 
 ---
 
