@@ -285,6 +285,9 @@ struct ContentView: View {
     private func processSelectedFile(_ fileURL: URL) {
         logMessage("Processing file: \(fileURL.lastPathComponent)")
         
+        runner.stop()
+        
+        
         // Enable security-scoped resource access
         let hasSecurityAccess = fileURL.startAccessingSecurityScopedResource()
         defer {
@@ -314,6 +317,7 @@ struct ContentView: View {
         
         patchMachO(path: patchedPath)
         logMessage("Successfully patched executable")
+        
         
         // Step 2: Create minimal app bundle with the patched dylib
         let appURL = URL.temporaryDirectory.appendingPathComponent("coolApp.app")

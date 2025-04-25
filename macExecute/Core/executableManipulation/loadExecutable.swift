@@ -15,7 +15,7 @@ class DylibMainRunner: ObservableObject {
     public var inputBuffer: [UInt8] = []  // Tracks all sent characters
     private var isRunning = false
     
-    public var thread: [Thread] = []
+    public var threads: [Thread] = []
     
     private init() {}
     
@@ -40,6 +40,10 @@ class DylibMainRunner: ObservableObject {
         }
         
         inputPipe = [0, 0]
+        
+        for thread in threads {
+            thread.cancel()
+        }
     }
     
     func run(dylibPath: String) {
@@ -149,6 +153,7 @@ class DylibMainRunner: ObservableObject {
         thread.name = (dylibPath as NSString).lastPathComponent
         thread.qualityOfService = .userInteractive
         thread.start()
+        threads.append(thread)
         NSLog("Execution thread started.")
     }
 

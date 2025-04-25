@@ -23,7 +23,7 @@ private var original_posix_spawnp: PosixSpawnFunction?
 
 private func fork_replacement() -> pid_t {
     NSLog("[HOOK] fork() called - stubbed")
-    return 0
+    return getpid()
 }
 
 private func execve_replacement(
@@ -41,7 +41,7 @@ private func execve_replacement(
 
 private func vfork_replacement() -> pid_t {
     print("[HOOK] vfork() called - stubbed")
-    return 0
+    return getpid()
 }
 
 private func makeCString(_ string: String) -> UnsafePointer<CChar> {
