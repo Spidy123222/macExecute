@@ -9,7 +9,6 @@ import Foundation
 import Darwin
 import MachO
 import SwiftUI
-import UIKit
 import MachOKit
 
 class LogCapture {
@@ -31,26 +30,25 @@ class LogCapture {
     private init() {
         originalStdout = dup(STDOUT_FILENO)
         originalStderr = dup(STDERR_FILENO)
-        startCapturing()
     }
 
     func startCapturing() {
         stdoutPipe = Pipe()
-        // stderrPipe = Pipe()
+        stderrPipe = Pipe()
 
         redirectOutput(to: stdoutPipe!, fileDescriptor: STDOUT_FILENO)
-        // redirectOutput(to: stderrPipe!, fileDescriptor: STDERR_FILENO)
+        redirectOutput(to: stderrPipe!, fileDescriptor: STDERR_FILENO)
 
         setupReadabilityHandler(for: stdoutPipe!, isStdout: true)
-        // setupReadabilityHandler(for: stderrPipe!, isStdout: false)
+        setupReadabilityHandler(for: stderrPipe!, isStdout: false)
     }
 
     func stopCapturing() {
         dup2(originalStdout, STDOUT_FILENO)
-        // dup2(originalStderr, STDERR_FILENO)
+        dup2(originalStderr, STDERR_FILENO)
 
         stdoutPipe?.fileHandleForReading.readabilityHandler = nil
-        // stderrPipe?.fileHandleForReading.readabilityHandler = nil
+        stderrPipe?.fileHandleForReading.readabilityHandler = nil
     }
 
     private func redirectOutput(to pipe: Pipe, fileDescriptor: Int32) {
@@ -64,21 +62,24 @@ class LogCapture {
             write(originalFD ?? STDOUT_FILENO, (data as NSData).bytes, data.count)
 
             if let logString = String(data: data, encoding: .utf8),
-               let cleanedLog = self?.cleanLog(logString), !cleanedLog.isEmpty {
+               let cleanedLog = self?.cleanLog(logString, isStdout: isStdout), !cleanedLog.isEmpty {
                 self?.capturedLogs.append(cleanedLog)
             }
         }
     }
 
-    private func cleanLog(_ raw: String) -> String? {
+    private func cleanLog(_ raw: String, isStdout: Bool) -> String? {
         let lines = raw.split(separator: "\n")
-        let filteredLines = lines.filter { line in
-            !line.contains("SwiftUI") &&
-            !line.contains("ForEach") &&
-            !line.contains("VStack") &&
-            !line.contains("Invalid frame dimension (negative or non-finite).")
+        var filteredLines = lines.filter { line in
+            // General check to determine if the line is likely from system logs or app logs
+            if isSystemLog(String(line)) {
+                return false // It's a system log, skip it
+            }
+
+            return true
         }
 
+        // Clean up and remove extra spaces or empty lines
         let cleaned = filteredLines.map { line -> String in
             if let tabRange = line.range(of: "\t") {
                 return line[tabRange.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
@@ -87,6 +88,29 @@ class LogCapture {
         }.joined(separator: "\n")
 
         return cleaned.isEmpty ? nil : cleaned.replacingOccurrences(of: "\n\n", with: "\n")
+    }
+
+    // Determine if a log is likely from the system, based on content and known patterns
+    private func isSystemLog(_ line: String) -> Bool {
+        // Check if the line contains any known system log patterns
+        let systemKeywords = [
+            "debugger", "fatal error", "Thread", "EXC_BAD_ACCESS", "signal", "mach_error",
+            "libSystem", "dispatch", "pthread", "systemd", "Apple", "dyld", "InputSystenClient", "emoji"
+        ]
+        
+        // Check for a pattern that typically indicates a system-level log
+        for keyword in systemKeywords {
+            if line.lowercased().contains(keyword.lowercased()) {
+                return true
+            }
+        }
+        
+        // Check for system log structure (e.g., log entry format)
+        if line.lowercased().hasPrefix("process") || line.lowercased().contains("backtrace") {
+            return true
+        }
+
+        return false
     }
 
     deinit {
@@ -160,7 +184,7 @@ struct ContentView: View {
                             .transition(.opacity)
                             .contextMenu() {
                                 Button("Copy") {
-                                    UIPasteboard.general.string = log
+                                    // UIPasteboard.general.string = log
                                 }
                             }
                     }
@@ -182,9 +206,10 @@ struct ContentView: View {
             if !hideButtons {
                 Button(action: {
                     if certificate == nil || password == nil {
+                        showFileImporter = true
                         let url = URL(string: "sidestore://certificate?callback_template=macexecute%3A%2F%2Fcertificate%3Fcert%3D%24%28BASE64_CERT%29%26password%3D%24%28PASSWORD%29")
                         if let url {
-                            UIApplication.shared.open(url)
+                            // UIApplication.shared.open(url)
                         }
                     } else {
                         showFileImporter = true
@@ -268,12 +293,24 @@ struct ContentView: View {
             }
         }
         // Step 1: Patch executable to make it a dylib
+        #if os(iOS)
         guard let patchedPath = patchExecutable(origPath: fileURL.path, targetPlatform: UInt32(PLATFORM_IOS)) else {
             logMessage("Failed to patch executable")
             return
         }
         
         replacePatternInFile(at: patchedPath, pattern: "/usr/lib/libpcre.0.dylib", replacement: "@rpath/libpcre.1.dylib")
+        replacePatternInFile(at: patchedPath, pattern: "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation", replacement: "/System/Library/Frameworks/Foundation.framework/Foundation")
+        replacePatternInFile(at: patchedPath, pattern: "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices", replacement: "/System/Library/Frameworks/CoreServices.framework/CoreServices")
+        replacePatternInFile(at: patchedPath, pattern: "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation", replacement: "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+        replacePatternInFile(at: patchedPath, pattern: "/System/Library/Frameworks/Security.framework/Versions/A/Security", replacement: "/System/Library/Frameworks/Security.framework/Security")
+        
+        #elseif os(macOS)
+        guard let patchedPath = patchExecutable(origPath: fileURL.path, targetPlatform: UInt32(PLATFORM_MACOS)) else {
+            logMessage("Failed to patch executable")
+            return
+        }
+        #endif
         
         patchMachO(path: patchedPath)
         logMessage("Successfully patched executable")
@@ -294,10 +331,7 @@ struct ContentView: View {
             logMessage("App exported to: \(exportedAppPath)")
             
             // Sign the app
-            guard let password = self.password else {
-                logMessage("Password not available")
-                return
-            }
+
             
             
             /*
@@ -311,8 +345,7 @@ struct ContentView: View {
                 logMessage("Loading dylib from: \(dylibURL.path)")
                 
                 // Execute with proper error handling
-                let result = loadAndExecuteMain(from: appURL.appendingPathComponent("Frameworks").appendingPathComponent("patched_exec.dylib").path)
-                logMessage("Execution completed with result: \(result)")
+                oadAndExecuteMain(from: appURL.appendingPathComponent("Frameworks").appendingPathComponent("patched_exec.dylib").path)")
                 
                 // Clean up temporary files
                 try? FileManager.default.removeItem(atPath: patchedPath)
@@ -322,12 +355,10 @@ struct ContentView: View {
             
             // Execute with proper error handling
             
-            
-            let result = runner.run(dylibPath: patchedPath)
-            logMessage("Execution completed with result: \(result)")
+            runner.run(dylibPath: patchedPath)
             
             // Clean up temporary files
-            // try? FileManager.default.removeItem(atPath: patchedPath)
+            try? FileManager.default.removeItem(atPath: patchedPath)
             
         } catch {
             logMessage("Error during app processing: \(error.localizedDescription)")

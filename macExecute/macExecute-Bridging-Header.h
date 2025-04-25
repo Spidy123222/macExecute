@@ -18,3 +18,4 @@
 
 #import "ZSign/zsigner.h"
 #import "utils.h"
+#import "fishhook/fishhook.h"

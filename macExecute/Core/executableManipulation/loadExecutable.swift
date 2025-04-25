@@ -7,98 +7,155 @@
 
 import Foundation
 import Darwin
-import MachO
-import MachOKit
 
 class DylibMainRunner: ObservableObject {
     private var dylibHandle: UnsafeMutableRawPointer?
     private var inputPipe: [Int32] = [0, 0] // [readFd, writeFd]
     private var progName: UnsafeMutablePointer<CChar>?
     public var inputBuffer: [UInt8] = []  // Tracks all sent characters
+    private var isRunning = false
+    
+    public var thread: [Thread] = []
     
     private init() {}
     
     static var shared = DylibMainRunner()
     
     func stop() {
+        isRunning = false
+        
         if let handle = dylibHandle {
             dlclose(handle)
+            dylibHandle = nil
         }
         if let prog = progName {
             free(prog)
-        }
-        if inputPipe[0] != 0 {
-            close(inputPipe[0])
-        }
-        if inputPipe[1] != 0 {
-            close(inputPipe[1])
-        }
-    }
-    
-    func run(dylibPath: String) -> Bool {
-        guard FileManager.default.fileExists(atPath: dylibPath) else {
-            NSLog("Dylib not found at \(dylibPath)")
-            return false
+            progName = nil
         }
         
-        guard pipe(&inputPipe) == 0 else {
-            NSLog("Failed to create pipe")
-            return false
-        }
-        
-        // Redirect stdin to our pipe
-        dup2(inputPipe[0], STDIN_FILENO)
-        
-        dylibHandle = dlopen(dylibPath, RTLD_NOW | RTLD_GLOBAL)
-        guard let handle = dylibHandle else {
-            NSLog("dlopen failed: \(String(cString: dlerror()!))")
-            return false
-        }
-        
-        
-        let symbols = ["main", "_main", "start", "_start", "entry", "_entry"]
-        var entrySymbol: UnsafeMutableRawPointer?
-        
-        for symbol in symbols {
-            dlerror()
-            if let sym = dlsym(handle, symbol), dlerror() == nil {
-                entrySymbol = sym
-                break
+        for fd in [inputPipe[0], inputPipe[1]] {
+            if fd != 0 {
+                close(fd)
             }
         }
         
-        guard let symbol = entrySymbol else {
-            NSLog("Entry point not found")
-            return false
+        inputPipe = [0, 0]
+    }
+    
+    func run(dylibPath: String) {
+        NSLog("Attempting to run dylib at path: %@", dylibPath)
+
+        guard FileManager.default.fileExists(atPath: dylibPath) else {
+            NSLog("File does not exist at path: %@", dylibPath)
+            return
         }
-        
+
+        // Create pipes for communication
+        guard pipe(&inputPipe) == 0 else {
+            NSLog("Failed to create input pipe.")
+            return
+        }
+
+        // Redirect stdin to our input pipe
+        dup2(inputPipe[0], STDIN_FILENO)
+        NSLog("Standard input redirected.")
+
+        dylibHandle = dlopen(dylibPath, RTLD_NOW | RTLD_GLOBAL)
+        guard let handle = dylibHandle else {
+            if let error = dlerror() {
+                let message = String(cString: error)
+                print("Failed to load dylib with dlopen: \(message)")
+            }
+            return
+        }
+        NSLog("Dylib loaded successfully.")
+
+        // Set up environment variables
         let shellEnv = "zsh"
         let homeEnv = URL.homeDirectory
         let pathEnv = "/bin:/usr/bin:/usr/local/bin"
-        let termEnv = "xterm-256color"
-        
-        typealias EntryFunc = @convention(c) (Int32, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Int32
-        let entry = unsafeBitCast(symbol, to: EntryFunc.self)
-        
-        progName = strdup(dylibPath)
-        var argv: [UnsafeMutablePointer<CChar>?] = [progName, nil]
+        let termEnv = "dumb"
+
+        setenv("SHELL", shellEnv, 1)
+        setenv("HOME", homeEnv.path, 1)
+        setenv("PATH", pathEnv, 1)
+        setenv("TERM", termEnv, 1)
+        setenv("LANG", "en_US.UTF-8", 1)
+        NSLog("Environment variables set.")
+
+        // Configure terminal settings
+        var termios = termios()
+        if tcgetattr(STDIN_FILENO, &termios) == 0 {
+            termios.c_lflag &= ~UInt(ECHO | ICANON)
+            termios.c_cc.18 = 1 // VMIN
+            termios.c_cc.19 = 0 // VTIME
+            tcsetattr(STDIN_FILENO, TCSANOW, &termios)
+            NSLog("Terminal attributes configured.")
+        } else {
+            NSLog("Failed to get terminal attributes.")
+        }
+
+        // Set up environment for the shell
         var envp: [UnsafeMutablePointer<CChar>?] = [
             strdup("SHELL=\(shellEnv)"),
-            strdup("HOME=\(homeEnv)"),
+            strdup("HOME=\(homeEnv.path)"),
             strdup("PATH=\(pathEnv)"),
             strdup("TERM=\(termEnv)"),
+            strdup("LANG=en_US.UTF-8"),
+            nil
         ]
-        let argc: Int32 = 1
-        
-        DispatchQueue.global(qos: .userInteractive).async {
-            let result = entry(argc, &argv, &envp)
-            NSLog("Entry point returned: \(result)")
+        NSLog("Shell environment prepared.")
+
+        // Find entry point
+        let symbols = ["main", "_main", "start", "_start", "entry", "_entry"]
+        var entrySymbol: UnsafeMutableRawPointer?
+
+        for symbol in symbols {
+            dlerror()
+            
+            if let sym = dlsym(handle, symbol), dlerror() == nil {
+                entrySymbol = sym
+                NSLog("Found entry symbol: %@", symbol)
+                break
+            }
         }
-        
-        return true
+
+        guard let symbol = entrySymbol else {
+            NSLog("No entry symbol found.")
+            return
+        }
+
+        // Convert entry point to function pointer
+        typealias EntryFunc = @convention(c) (Int32, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Int32
+        let entry = unsafeBitCast(symbol, to: EntryFunc.self)
+
+        progName = strdup((dylibPath as NSString).lastPathComponent)
+        var argv: [UnsafeMutablePointer<CChar>?] = [
+            progName,
+            strdup("-f"),
+            nil
+        ]
+
+        isRunning = true
+        NSLog("Starting background thread for dylib execution.")
+
+        // Execute entry point in background
+        let argc: Int32 = 1
+        var thread = Thread {
+            LogCapture.shared.startCapturing()
+            let result = entry(argc, &argv, &envp)
+        }
+
+        thread.name = (dylibPath as NSString).lastPathComponent
+        thread.qualityOfService = .userInteractive
+        thread.start()
+        NSLog("Execution thread started.")
     }
+
     
     func sendInput(_ text: String) {
+        guard isRunning else { return }
+        
         let bytes = Array(text.utf8)
         inputBuffer.append(contentsOf: bytes)
         
@@ -107,42 +164,52 @@ class DylibMainRunner: ObservableObject {
         }
     }
     
+    func sendControlSequence(_ controlChar: UInt8) {
+        guard isRunning else { return }
+        
+        var ctrlChar = controlChar
+        write(inputPipe[1], &ctrlChar, 1)
+    }
+    
     func removeFromIndex(_ index: Int) {
-        guard index >= 0 && index < inputBuffer.count else {
-            NSLog("Index out of range")
+        guard index >= 0 && index < inputBuffer.count, isRunning else {
             return
         }
         
-        // Calculate how many backspaces we need to send
-        let positionsToMoveBack = inputBuffer.count - index
+        // Send backspace to delete character
+        var backspace: UInt8 = 8
+        write(inputPipe[1], &backspace, 1)
         
-        // Send backspaces to move cursor to the target position
-        for _ in 0..<positionsToMoveBack {
-            var backspace: UInt8 = 8  // ASCII backspace
-            write(inputPipe[1], &backspace, 1)
-        }
-        
-        // Send remaining characters to overwrite the deleted portion
-        let remainingChars = Array(inputBuffer[(index + 1)...])
-        if !remainingChars.isEmpty {
-            write(inputPipe[1], remainingChars, remainingChars.count)
-        }
-        
-        // Send spaces to clear any remaining characters at the end
-        let spacesNeeded = positionsToMoveBack - remainingChars.count
-        if spacesNeeded > 0 {
-            var space: UInt8 = 32  // ASCII space
-            for _ in 0..<spacesNeeded {
-                write(inputPipe[1], &space, 1)
-            }
-            // Move cursor back again
-            for _ in 0..<spacesNeeded {
-                var backspace: UInt8 = 8
-                write(inputPipe[1], &backspace, 1)
-            }
-        }
-        
-        // Update our buffer
+        // Update internal buffer
         inputBuffer.remove(at: index)
+    }
+    
+    // Improved line editing capabilities
+    func clearLine() {
+        guard isRunning else { return }
+        
+        // Send Ctrl+U to clear line
+        sendControlSequence(21)
+        inputBuffer.removeAll()
+    }
+    
+    func cursorLeft() {
+        guard isRunning else { return }
+        
+        // Send left arrow escape sequence
+        let escSequence = "\u{1B}[D"
+        escSequence.utf8CString.withUnsafeBufferPointer { buffer in
+            write(inputPipe[1], buffer.baseAddress, buffer.count - 1)
+        }
+    }
+    
+    func cursorRight() {
+        guard isRunning else { return }
+        
+        // Send right arrow escape sequence
+        let escSequence = "\u{1B}[C"
+        escSequence.utf8CString.withUnsafeBufferPointer { buffer in
+            write(inputPipe[1], buffer.baseAddress, buffer.count - 1)
+        }
     }
 }

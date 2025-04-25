@@ -3,22 +3,4 @@
    uuid = "EEA69A88-3616-4B82-ADF4-D4DD44FB2D2A"
    type = "1"
    version = "2.0">
-   <Breakpoints>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "01D41B68-1757-43B2-8C07-5EC0A493B6A7"
-            shouldBeEnabled = "Yes"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "../../Library/Developer/Xcode/DerivedData/macExecute-dgbhskpmwikyxlawtgyvcnrlzeuc/SourcePackages/checkouts/Zsign-Package/src/zsign.mm"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "186"
-            endingLineNumber = "186"
-            landmarkName = "zsign(app, prov, key, pass, entitlement, bundleid, displayname, bundleversion, adhoc, excludeprovion)"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-   </Breakpoints>
 </Bucket>

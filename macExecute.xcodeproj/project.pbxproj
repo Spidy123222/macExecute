@@ -37,6 +37,9 @@
 			membershipExceptions = (
 				Info.plist,
 			);
+			platformFiltersByRelativePath = {
+				Core/Dependencies/libpcre.1.dylib = (ios, );
+			};
 			target = 4EEFAB682DB7A2060090586F /* macExecute */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -51,6 +54,9 @@
 			membershipExceptions = (
 				Core/Dependencies/libpcre.1.dylib,
 			);
+			platformFiltersByRelativePath = {
+				Core/Dependencies/libpcre.1.dylib = (ios, );
+			};
 		};
 /* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
 

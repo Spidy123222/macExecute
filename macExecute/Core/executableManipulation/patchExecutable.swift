@@ -122,8 +122,6 @@ func replacePatternInFile(at filePath: String, pattern: String, replacement: Str
 func patchMachO(path: String) {
     var has64bitSlice = false
     
-   //  getSymbols(path)
-    
     let error = parseMachO(path: path.cString(using: .utf8)!) { path, header, fd, filePtr in
         if header.pointee.cputype == CPU_TYPE_ARM64 {
             has64bitSlice = true
