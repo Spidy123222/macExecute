@@ -12,7 +12,8 @@
 - Never. It requires JIT, and even without JIT, it would still need to be installed via SideStore or AltStore like LiveContainer.
 
 **Will this run [Insert App Here]?**  
-- Probably not. iOS is missing many libraries and frameworks that most CLI apps depend on.
+- Probably not. iOS is missing many libraries, functions and frameworks that most CLI apps depend on.
+    - even if the library / framework exists, some functions that the binary may try to use will not be in the iOS version of that library
 
 ---
 
