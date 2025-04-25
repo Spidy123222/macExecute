@@ -72,16 +72,16 @@ class DylibMainRunner: ObservableObject {
             return false
         }
         
-        var shellEnv = "zsh"
-        var homeEnv = URL.homeDirectory  // Or set this to a valid path
-        var pathEnv = "/bin:/usr/bin:/usr/local/bin"  // Or set this to an appropriate path
-        var termEnv = "xterm-256color"  // Or set this to a terminal type you prefer
+        let shellEnv = "zsh"
+        let homeEnv = URL.homeDirectory
+        let pathEnv = "/bin:/usr/bin:/usr/local/bin"
+        let termEnv = "xterm-256color"
         
         typealias EntryFunc = @convention(c) (Int32, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Int32
         let entry = unsafeBitCast(symbol, to: EntryFunc.self)
         
         progName = strdup(dylibPath)
-        var argv: [UnsafeMutablePointer<CChar>?] = [progName]
+        var argv: [UnsafeMutablePointer<CChar>?] = [progName, nil]
         var envp: [UnsafeMutablePointer<CChar>?] = [
             strdup("SHELL=\(shellEnv)"),
             strdup("HOME=\(homeEnv)"),
