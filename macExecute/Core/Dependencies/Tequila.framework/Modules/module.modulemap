@@ -1,0 +1,6 @@
+framework module Tequila {
+  umbrella header "Tequila.h"
+  export *
+
+  module * { export * }
+}

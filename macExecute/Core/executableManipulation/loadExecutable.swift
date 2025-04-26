@@ -64,7 +64,7 @@ class DylibMainRunner: ObservableObject {
         dup2(inputPipe[0], STDIN_FILENO)
         NSLog("Standard input redirected.")
 
-        dylibHandle = dlopen(dylibPath, RTLD_NOW | RTLD_GLOBAL)
+        dylibHandle = dlopen(dylibPath, RTLD_LAZY)
         guard let handle = dylibHandle else {
             if let error = dlerror() {
                 let message = String(cString: error)
@@ -76,9 +76,10 @@ class DylibMainRunner: ObservableObject {
 
         // Set up environment variables
         let shellEnv = "zsh"
-        let homeEnv = URL.homeDirectory
-        let pathEnv = "/bin:/usr/bin:/usr/local/bin"
-        let termEnv = "dumb"
+        let homeEnv = URL.documentsDirectory
+        NSLog(Bundle.main.bundlePath)
+        let pathEnv = "/bin:/usr/bin:/usr/local/bin:\(homeEnv.path)/bin"
+        let termEnv = "macExecute"
 
         setenv("SHELL", shellEnv, 1)
         setenv("HOME", homeEnv.path, 1)
@@ -136,7 +137,6 @@ class DylibMainRunner: ObservableObject {
         progName = strdup((dylibPath as NSString).lastPathComponent)
         var argv: [UnsafeMutablePointer<CChar>?] = [
             progName,
-            strdup("-f"),
             nil
         ]
 

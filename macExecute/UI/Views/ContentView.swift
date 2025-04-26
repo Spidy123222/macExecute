@@ -5,11 +5,10 @@
 //  Created by Stossy11 on 22/04/2025.
 //
 
-import Foundation
-import Darwin
-import MachO
 import SwiftUI
-import MachOKit
+import UniformTypeIdentifiers
+import Foundation
+import Combine
 
 class LogCapture {
     static let shared = LogCapture()
@@ -18,8 +17,10 @@ class LogCapture {
     private var stderrPipe: Pipe?
     private let originalStdout: Int32
     private let originalStderr: Int32
+    
+    var allLogs: [String] = []
 
-    var capturedLogs: [String] = [] {
+    var capturedLogs: [(text: String, color: Color)] = [] {
         didSet {
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .newLogCaptured, object: nil)
@@ -61,57 +62,70 @@ class LogCapture {
             let originalFD = isStdout ? self?.originalStdout : self?.originalStderr
             write(originalFD ?? STDOUT_FILENO, (data as NSData).bytes, data.count)
 
-            if let logString = String(data: data, encoding: .utf8),
-               let cleanedLog = self?.cleanLog(logString, isStdout: isStdout), !cleanedLog.isEmpty {
-                self?.capturedLogs.append(cleanedLog)
+            if let logString = String(data: data, encoding: .utf8) {
+                if !logString.isEmpty {
+                    self?.processLog(logString, isStdout: isStdout)
+                }
             }
         }
     }
-
-    private func cleanLog(_ raw: String, isStdout: Bool) -> String? {
-        let lines = raw.split(separator: "\n")
-        var filteredLines = lines.filter { line in
-            // General check to determine if the line is likely from system logs or app logs
-            if isSystemLog(String(line)) {
-                return false // It's a system log, skip it
+    
+    private func processLog(_ raw: String, isStdout: Bool) {
+        let lines = raw.split(separator: "\n", omittingEmptySubsequences: false)
+        
+        for line in lines {
+            let osLogPattern = "OSLOG-[A-F0-9\\-]+\\s+\\d+\\s+\\d+\\s+[L]\\s+\\d+\\s+\\{.*\\}"
+            let processedLine = line.trimmingCharacters(in: .newlines).replacingOccurrences(of: osLogPattern, with: "", options: .regularExpression)
+            
+            if processedLine.isEmpty || isSystemLog(String(processedLine)) {
+                if !processedLine.isEmpty {
+                    allLogs.append(processedLine)
+                }
+                continue
             }
-
-            return true
+            
+            let (text, color) = parseAnsiEscapeCodes(input: String(processedLine))
+            
+            let pattern = "oo'\"mobile@localhost"
+            let modifiedString = text.replacingOccurrences(of: pattern, with: "oo'\"\n\nmobile@localhost")
+            
+            capturedLogs.append((text: modifiedString, color: color))
+            allLogs.append(text)
         }
-
-        // Clean up and remove extra spaces or empty lines
-        let cleaned = filteredLines.map { line -> String in
-            if let tabRange = line.range(of: "\t") {
-                return line[tabRange.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            return line.trimmingCharacters(in: .whitespacesAndNewlines)
-        }.joined(separator: "\n")
-
-        return cleaned.isEmpty ? nil : cleaned.replacingOccurrences(of: "\n\n", with: "\n")
     }
 
-    // Determine if a log is likely from the system, based on content and known patterns
+
     private func isSystemLog(_ line: String) -> Bool {
-        // Check if the line contains any known system log patterns
-        let systemKeywords = [
-            "debugger", "fatal error", "Thread", "EXC_BAD_ACCESS", "signal", "mach_error",
-            "libSystem", "dispatch", "pthread", "systemd", "Apple", "dyld", "InputSystenClient", "emoji"
+        // Keep only essential system log filters to preserve ASCII art
+        let patterns: [String] = [
+            #"debugged"#,
+            #"EXC_BAD_ACCESS"#,
+            #"signal"#,
+            #"dispatch"#,
+            #"pthread"#,
+            #"systemd"#,
+            #"Apple"#,
+            #"InputSystemClient"#,
+            #"emoji"#,
+            #"called - stubbed"#,
+            #"forEach<Array"#,
+            #"Hang detected: \d+\.\d+s \(debugger attached, not reporting\)"#,
+            #"The view service did terminate with error: Error Domain=_UIViewServiceErrorDomain Code=1 \"\(null\)\" UserInfo=\{Terminated=disconnect method\}"#,
         ]
         
-        // Check for a pattern that typically indicates a system-level log
-        for keyword in systemKeywords {
-            if line.lowercased().contains(keyword.lowercased()) {
-                return true
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+                let range = NSRange(line.startIndex..<line.endIndex, in: line)
+                if regex.firstMatch(in: line, options: [], range: range) != nil {
+                    return true
+                }
             }
         }
         
-        // Check for system log structure (e.g., log entry format)
-        if line.lowercased().hasPrefix("process") || line.lowercased().contains("backtrace") {
-            return true
-        }
-
         return false
     }
+
 
     deinit {
         stopCapturing()
@@ -122,14 +136,86 @@ extension Notification.Name {
     static let newLogCaptured = Notification.Name("newLogCaptured")
 }
 
-import Combine
+
+
+func parseAnsiEscapeCodes(input: String) -> (string: String, color: Color) {
+    var outputString = ""
+    var currentIndex = input.startIndex
+    var currentColor = Color.white
+    
+    while currentIndex < input.endIndex {
+        if input[currentIndex] == "\u{1B}" && input[input.index(after: currentIndex)] == "[" {
+            // Found an ANSI escape sequence
+            var escapeEndIndex = currentIndex
+            
+            // Find the end of the escape sequence (marked by 'm', 'C', etc.)
+            while escapeEndIndex < input.endIndex && !input[escapeEndIndex].isNewline && !input[escapeEndIndex].isWhitespace && input[escapeEndIndex] != "m" && input[escapeEndIndex] != "C" {
+                escapeEndIndex = input.index(after: escapeEndIndex)
+            }
+            
+            // Check if we are still within bounds after the loop
+            if escapeEndIndex < input.endIndex {
+                // Include the escape character and the sequence character (e.g., 'm' or 'C')
+                escapeEndIndex = input.index(after: escapeEndIndex)
+                
+                // Extract the escape sequence
+                let escapeSequence = String(input[currentIndex..<escapeEndIndex])
+                
+                // Process the color code(s)
+                let components = escapeSequence.dropFirst().dropLast().split(separator: ";")
+                for component in components {
+                    if component == "0" {
+                        currentColor = .white
+                    } else if component == "30" {
+                        currentColor = .black
+                    } else if component == "31" {
+                        currentColor = .red
+                    } else if component == "32" {
+                        currentColor = .green
+                    } else if component == "33" {
+                        currentColor = .yellow
+                    } else if component == "34" {
+                        currentColor = .blue
+                    } else if component == "35" {
+                        currentColor = .purple // SwiftUI uses .purple instead of .magenta
+                    } else if component == "36" {
+                        currentColor = .cyan
+                    } else if component == "37" {
+                        currentColor = .white
+                    }
+                }
+                
+                // Handle Cursor movement (e.g., [34C)
+                if escapeEndIndex < input.endIndex && input[escapeEndIndex] == "C" {
+                    // Cursor movement, we just move the index forward and don't change color
+                    currentIndex = escapeEndIndex
+                    continue
+                }
+                
+                // Move past this escape sequence
+                currentIndex = escapeEndIndex
+            } else {
+                // Incomplete escape sequence, just add the ESC character and move on
+                outputString.append(input[currentIndex])
+                currentIndex = input.index(after: currentIndex)
+            }
+        } else {
+            // Not an escape sequence, add the character to the output
+            outputString.append(input[currentIndex])
+            currentIndex = input.index(after: currentIndex)
+        }
+    }
+    
+    return (string: outputString, color: currentColor)
+}
+
 
 class LogViewModel: ObservableObject {
-    @Published var logs: [String] = []
+    @Published var logs: [(text: String, color: Color)] = []
     private var cancellables = Set<AnyCancellable>()
     
     init() {
-        _ = LogCapture.shared
+        LogCapture.shared.stopCapturing()
         
         NotificationCenter.default.publisher(for: .newLogCaptured)
             .receive(on: RunLoop.main)
@@ -151,18 +237,17 @@ class LogViewModel: ObservableObject {
     }
 }
 
-
 struct ContentView: View {
     @State private var showFileImporter = false
     @State private var statusMessage = "Tap to select executable"
     @AppStorage("certificate") private var certificate: Data?
     @AppStorage("password") private var password: String?
-    @State var textinput = ""
+    @State private var inputText = ""
+    
+    @State private var currentBinaryPath: String? = nil
+    
     @StateObject private var logsModel = LogViewModel()
-    
     @StateObject private var runner = DylibMainRunner.shared
-    
-    @State private var hideButtons = false
     
     init() {
         setenv("LC_HOME_PATH", getenv("HOME"), 1)
@@ -170,250 +255,171 @@ struct ContentView: View {
     }
     
     var body: some View {
-        VStack(spacing: 16) {
-            // Log display section
-            ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(logsModel.logs, id: \.self) { log in
-                        Text(log)
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .padding(4)
-                            .background(Color.black.opacity(0.7))
-                            .cornerRadius(4)
-                            .transition(.opacity)
-                            .contextMenu() {
-                                Button("Copy") {
-                                    // UIPasteboard.general.string = log
-                                }
+        ZStack(alignment: .topTrailing) {
+            VStack(spacing: 0) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) { // Spacing: 0 for ASCII art
+                            ForEach(Array(logsModel.logs.enumerated()), id: \.element.text) { index, log in
+                                Text(log.text)
+                                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .foregroundColor(log.color)
+                                    .textSelection(.enabled)
+                                    .id(index) // Ensure each log has a unique ID
                             }
-                    }
-                }
-            }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            
-            TextInputView()
-                .contextMenu() {
-                    Button {
-                        hideButtons.toggle()
-                    } label: {
-                        Text(hideButtons ? "Show Buttons" : "Hide Buttons")
-                    }
-                }
-            
-            // Main action button
-            if !hideButtons {
-                Button(action: {
-                    if certificate == nil || password == nil {
-                        showFileImporter = true
-                        let url = URL(string: "sidestore://certificate?callback_template=macexecute%3A%2F%2Fcertificate%3Fcert%3D%24%28BASE64_CERT%29%26password%3D%24%28PASSWORD%29")
-                        if let url {
-                            // UIApplication.shared.open(url)
+                            Color.clear.frame(height: 1) // To anchor scroll
+                                .id("bottom")
                         }
-                    } else {
-                        showFileImporter = true
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
                     }
-                }) {
-                    Text(statusMessage)
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
+                    .background(Color.black)
+                    .onChange(of: logsModel.logs.count) { _ in
+                        withAnimation {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
+                    }
                 }
                 
-                
-                // Reset credentials button
-                Button(action: {
-                    certificate = nil
-                    password = nil
-                    statusMessage = "Tap to select executable"
-                }) {
-                    Text("Reset Credentials")
-                        .padding()
-                        .background(Color.red)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
+                // Terminal input area
+                HStack {
+                    Text("›")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.green)
+                    TextField("", text: $inputText)
+                        .onSubmit {
+                            sendInput()
+                        }
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.green)
+                        .background(Color.clear)
+                        .disableAutocorrection(true)
+                        .autocapitalization(.none)
+                }
+                .padding(8)
+                .background(Color.black)
+                .overlay(Rectangle().frame(height: 1).foregroundColor(.gray), alignment: .top)
+            }
+            
+            Button(action: {
+                runner.stop()
+                LogCapture.shared.stopCapturing()
+                logsModel.clearLogs()
+                // currentBinaryPath = nil
+            }) {
+                Text("Exit")
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .foregroundColor(.red)
+                    .padding(8)
+            }
+        }
+        .overlay {
+            if currentBinaryPath == nil {
+                ZStack(alignment: .center) {
+                    Color.black.opacity(0.5)
+                    
+                    Button("Select Binary") {
+                        currentBinaryPath = nil
+                        showFileImporter = true
+                    }
                 }
             }
         }
-        .padding()
-        .onOpenURL { url in
-            handleIncomingURL(url)
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black)
+        .onOpenURL { handleIncomingURL($0) }
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item]) { result in
-            handleFileImport(result)
+            if case .success(let fileURL) = result {
+                processSelectedFile(fileURL)
+            }
         }
     }
     
-    
+    private func sendInput() {
+        guard !inputText.isEmpty else { return }
+        runner.sendInput(inputText + "\n")
+        inputText = ""
+    }
     
     private func handleIncomingURL(_ url: URL) {
-        guard url.host == "certificate" else { return }
-        
-        if let components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
-            let queryItems = components.queryItems?.reduce(into: [String: String]()) {
-                $0[$1.name.lowercased()] = $1.value
-            } ?? [:]
-            
-            guard let encodedCert = queryItems["cert"]?.removingPercentEncoding,
-                  let password = queryItems["password"],
-                  let certData = Data(base64Encoded: encodedCert) else {
-                logMessage("Failed to parse certificate data")
-                return
-            }
-            
-            self.certificate = certData
-            self.password = password
-            logMessage("Certificate and password received")
-            statusMessage = "Ready to select executable"
-        }
-    }
-    
-    private func handleFileImport(_ result: Result<URL, Error>) {
-        switch result {
-        case .success(let fileURL):
-            processSelectedFile(fileURL)
-        case .failure(let error):
-            logMessage("File import failed: \(error.localizedDescription)")
-        }
-    }
-    
-    
-
-    
-    private func processSelectedFile(_ fileURL: URL) {
-        logMessage("Processing file: \(fileURL.lastPathComponent)")
-        
-        runner.stop()
-        
-        
-        // Enable security-scoped resource access
-        let hasSecurityAccess = fileURL.startAccessingSecurityScopedResource()
-        defer {
-            if hasSecurityAccess {
-                fileURL.stopAccessingSecurityScopedResource()
-            }
-        }
-        // Step 1: Patch executable to make it a dylib
-        #if os(iOS)
-        guard let patchedPath = patchExecutable(origPath: fileURL.path, targetPlatform: UInt32(PLATFORM_IOS)) else {
-            logMessage("Failed to patch executable")
+        guard url.host == "certificate",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let cert = components.queryItems?.first(where: { $0.name == "cert" })?.value?.removingPercentEncoding,
+              let pass = components.queryItems?.first(where: { $0.name == "password" })?.value,
+              let certData = Data(base64Encoded: cert)
+        else {
+            logMessage("Failed to parse certificate")
             return
         }
         
-        replacePatternInFile(at: patchedPath, pattern: "/usr/lib/libpcre.0.dylib", replacement: "@rpath/libpcre.1.dylib")
-        replacePatternInFile(at: patchedPath, pattern: "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation", replacement: "/System/Library/Frameworks/Foundation.framework/Foundation")
-        replacePatternInFile(at: patchedPath, pattern: "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices", replacement: "/System/Library/Frameworks/CoreServices.framework/CoreServices")
-        replacePatternInFile(at: patchedPath, pattern: "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation", replacement: "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
-        replacePatternInFile(at: patchedPath, pattern: "/System/Library/Frameworks/Security.framework/Versions/A/Security", replacement: "/System/Library/Frameworks/Security.framework/Security")
+        certificate = certData
+        password = pass
+        statusMessage = "Ready to select executable"
+        logMessage("Certificate received")
+    }
+    
+    private func processSelectedFile(_ fileURL: URL) {
+        LogCapture.shared.stopCapturing()
+        logsModel.clearLogs()
+        
+        logMessage("Processing: \(fileURL.lastPathComponent)")
+        runner.stop()
+        
+        let hasAccess = fileURL.startAccessingSecurityScopedResource()
+        defer { if hasAccess { fileURL.stopAccessingSecurityScopedResource() } }
+
+        #if os(iOS)
+        guard let patched = patchExecutable(origPath: fileURL.path, targetPlatform: UInt32(PLATFORM_IOS)) else {
+            logMessage("Patch failed")
+            return
+        }
+        
+        [
+            ("/usr/lib/libpcre.0.dylib", "@rpath/libpcre.1.dylib"),
+            ("/opt/homebrew/opt/pcre2/lib/libpcre2-32.0.dylib", "@rpath/libpcre.1.dylib"),
+            ("/opt/homebrew/opt/ncurses/lib/libncursesw.6.dylib", "@rpath/libncursesw.6.dylib"),
+            ("/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation", "/System/Library/Frameworks/Foundation.framework/Foundation"),
+            ("/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation", "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"),
+            ("/System/Library/Frameworks/Security.framework/Versions/A/Security", "/System/Library/Frameworks/Security.framework/Security"),
+            ("/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation", "/System/Library/Frameworks/AVFoundation.framework/AVFoundation"),
+            ("/System/Library/Frameworks/Cocoa.framework/Versions/A/Cocoa", "@executable_path/Frameworks/Cocoa.framework/Cocoa"),
+            ("/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio", "/System/Library/Frameworks/CoreAudio.framework/CoreAudio"),
+            ("/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia", "/System/Library/Frameworks/CoreMedia.framework/CoreMedia"),
+            ("/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo", "/System/Library/Frameworks/CoreVideo.framework/CoreVideo"),
+            ("/System/Library/Frameworks/CoreWLAN.framework/Versions/A/CoreWLAN", "@executable_path/Frameworks/Cocoa.framework/Cocoa"),
+            ("/System/Library/Frameworks/IOBluetooth.framework/Versions/A/IOBluetooth", "/System/Library/Frameworks/CoreBluetooth.framework/CoreBluetooth"),
+            ("/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit", "/System/Library/Frameworks/IOKit.framework/IOKit"),
+            ("/System/Library/Frameworks/Metal.framework/Versions/A/Metal", "Metal.framework/Metal"),
+            ("/System/Library/Frameworks/SystemConfiguration.framework/Versions/A/SystemConfiguration", "/System/Library/Frameworks/SystemConfiguration.framework/SystemConfiguration"),
+            ("/System/Library/PrivateFrameworks/DisplayServices.framework/Versions/A/DisplayServices", "@executable_path/Frameworks/DisplayServices.framework/DisplayServices"),
+            ("/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit", "@executable_path/Frameworks/Tequila.framework/Tequila"),
+            ("/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics", "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+        ].forEach { replacePatternInFile(at: patched, pattern: $0.0, replacement: $0.1) }
         
         #elseif os(macOS)
-        guard let patchedPath = patchExecutable(origPath: fileURL.path, targetPlatform: UInt32(PLATFORM_MACOS)) else {
-            logMessage("Failed to patch executable")
+        guard let patched = patchExecutable(origPath: fileURL.path, targetPlatform: UInt32(PLATFORM_MACOS)) else {
+            logMessage("Patch failed")
             return
         }
         #endif
         
-        patchMachO(path: patchedPath)
-        logMessage("Successfully patched executable")
+        currentBinaryPath = patched
         
+        patchMachO(path: patched)
+        logMessage("Executable patched")
         
-        // Step 2: Create minimal app bundle with the patched dylib
-        let appURL = URL.temporaryDirectory.appendingPathComponent("coolApp.app")
-        guard let appPath = createMinimalIOSAppBundle(outputPath: appURL.path, dylibPath: patchedPath) else {
-            logMessage("Failed to create app bundle")
-            return
-        }
-        
-        // Step 4: Prepare entitlements
-        let entitlementsURL = prepareEntitlements()
-        
-        // Step 5: Sign and export the app
-        do {
-            let exportedAppPath = try exportIPA()
-            logMessage("App exported to: \(exportedAppPath)")
-            
-            // Sign the app
-
-            
-            
-            /*
-            ZSigner.sign(withAppPath: appPath.path, prov: nil, key: self.certificate, pass: password) { cool, error in
-                print(error)
-                print(cool)
-                
-                logMessage("App signed successfully")
-                
-                var dylibURL = appURL.appendingPathComponent("Frameworks").appendingPathComponent("patched_exec.dylib")
-                logMessage("Loading dylib from: \(dylibURL.path)")
-                
-                // Execute with proper error handling
-                oadAndExecuteMain(from: appURL.appendingPathComponent("Frameworks").appendingPathComponent("patched_exec.dylib").path)")
-                
-                // Clean up temporary files
-                try? FileManager.default.removeItem(atPath: patchedPath)
-            }
-            */
-            logMessage("Loading dylib from: \(patchedPath)")
-            
-            // Execute with proper error handling
-            
-            runner.run(dylibPath: patchedPath)
-            
-            // Clean up temporary files
-            try? FileManager.default.removeItem(atPath: patchedPath)
-            
-        } catch {
-            logMessage("Error during app processing: \(error.localizedDescription)")
-        }
-    }
-    
-    private func prepareEntitlements() -> URL {
-        let entitlements: [String: Any] = [
-            "application-identifier": Bundle.main.bundleIdentifier ?? "com.example.app",
-            "get-task-allow": true,
-
-        ]
-        
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let entitlementsURL = documents.appendingPathComponent("entitlements.plist")
-        
-        do {
-            let plistData = try PropertyListSerialization.data(fromPropertyList: entitlements, format: .xml, options: 0)
-            try plistData.write(to: entitlementsURL)
-            logMessage("Entitlements saved to: \(entitlementsURL.path)")
-        } catch {
-            logMessage("Failed to save entitlements: \(error.localizedDescription)")
-        }
-        
-        return entitlementsURL
+        runner.run(dylibPath: patched)
+        try? FileManager.default.removeItem(atPath: patched)
     }
     
     private func logMessage(_ message: String) {
+        // Add log message with white color
+        LogCapture.shared.capturedLogs.append((text: message, color: .white))
         NSLog(message)
     }
 }
-
-
-func exportIPA() throws -> String {
-    let fileManager = FileManager.default
-    let bundleURL = Bundle.main.bundleURL
-    
-    let temporaryDirectory = fileManager.temporaryDirectory
-    let appURL = temporaryDirectory.appendingPathComponent("currentApp.app")
-    
-    if fileManager.fileExists(atPath: appURL.path) {
-        try fileManager.removeItem(at: appURL)
-    }
-    
-    try fileManager.copyItem(at: bundleURL, to: appURL)
-    
-    return appURL.path
-}
-
-
-
 
 #Preview {
     ContentView()

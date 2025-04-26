@@ -35,6 +35,11 @@
 		4E1032382DB9C1A500BF7C06 /* Exceptions for "macExecute" folder in "macExecute" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				fishhook/CODE_OF_CONDUCT.md,
+				fishhook/CONTRIBUTING.md,
+				fishhook/fishhook.podspec,
+				fishhook/LICENSE,
+				fishhook/README.md,
 				Info.plist,
 			);
 			platformFiltersByRelativePath = {
@@ -48,11 +53,19 @@
 		4EEDD0642DBB1AF200F5DBAC /* Exceptions for "macExecute" folder in "Embed Frameworks" phase from "macExecute" target */ = {
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			attributesByRelativePath = {
+				Core/Dependencies/Cocoa.framework = (CodeSignOnCopy, RemoveHeadersOnCopy, );
+				Core/Dependencies/DisplayServices.framework = (CodeSignOnCopy, RemoveHeadersOnCopy, );
+				Core/Dependencies/Tequila.framework = (CodeSignOnCopy, RemoveHeadersOnCopy, );
+				Core/Dependencies/libncursesw.6.dylib = (CodeSignOnCopy, );
 				Core/Dependencies/libpcre.1.dylib = (CodeSignOnCopy, );
 			};
 			buildPhase = 4E59D4DD2DBA7674009CEE71 /* Embed Frameworks */;
 			membershipExceptions = (
+				Core/Dependencies/Cocoa.framework,
+				Core/Dependencies/DisplayServices.framework,
+				Core/Dependencies/libncursesw.6.dylib,
 				Core/Dependencies/libpcre.1.dylib,
+				Core/Dependencies/Tequila.framework,
 			);
 			platformFiltersByRelativePath = {
 				Core/Dependencies/libpcre.1.dylib = (ios, );
