@@ -64,7 +64,7 @@ class DylibMainRunner: ObservableObject {
         dup2(inputPipe[0], STDIN_FILENO)
         NSLog("Standard input redirected.")
 
-        dylibHandle = dlopen(dylibPath, RTLD_LAZY)
+        dylibHandle = dlopen(dylibPath, RTLD_LAZY|RTLD_GLOBAL|RTLD_FIRST)
         guard let handle = dylibHandle else {
             if let error = dlerror() {
                 let message = String(cString: error)

@@ -28,6 +28,7 @@
 /* Begin PBXFileReference section */
 		4E59D5062DBA7BB8009CEE71 /* CoreWLAN.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreWLAN.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.2.sdk/System/Library/Frameworks/CoreWLAN.framework; sourceTree = DEVELOPER_DIR; };
 		4E59D5E32DBA87CD009CEE71 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		4EEDD36A2DBCAB3200F5DBAC /* libswiftCore.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libswiftCore.tbd; path = usr/lib/swift/libswiftCore.tbd; sourceTree = SDKROOT; };
 		4EEFAB692DB7A2060090586F /* macExecute.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = macExecute.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -43,6 +44,11 @@
 				Info.plist,
 			);
 			platformFiltersByRelativePath = {
+				Core/Dependencies/Cocoa.framework = (ios, );
+				Core/Dependencies/CoreWLAN.framework = (ios, );
+				Core/Dependencies/DisplayServices.framework = (ios, );
+				Core/Dependencies/Tequila.framework = (ios, );
+				Core/Dependencies/libncursesw.6.dylib = (ios, );
 				Core/Dependencies/libpcre.1.dylib = (ios, );
 			};
 			target = 4EEFAB682DB7A2060090586F /* macExecute */;
@@ -68,6 +74,10 @@
 				Core/Dependencies/Tequila.framework,
 			);
 			platformFiltersByRelativePath = {
+				Core/Dependencies/Cocoa.framework = (ios, );
+				Core/Dependencies/DisplayServices.framework = (ios, );
+				Core/Dependencies/Tequila.framework = (ios, );
+				Core/Dependencies/libncursesw.6.dylib = (ios, );
 				Core/Dependencies/libpcre.1.dylib = (ios, );
 			};
 		};
@@ -102,6 +112,7 @@
 		4E1031632DB9B87D00BF7C06 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				4EEDD36A2DBCAB3200F5DBAC /* libswiftCore.tbd */,
 				4E59D5E32DBA87CD009CEE71 /* CoreGraphics.framework */,
 				4E59D5062DBA7BB8009CEE71 /* CoreWLAN.framework */,
 			);
@@ -365,6 +376,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/macExecute/Core/Dependencies",
+					"$(PROJECT_DIR)/macExecute/Core/Dependencies/libSwift",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;
@@ -414,6 +426,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/macExecute/Core/Dependencies",
+					"$(PROJECT_DIR)/macExecute/Core/Dependencies/libSwift",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0;

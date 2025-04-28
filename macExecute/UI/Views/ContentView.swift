@@ -251,7 +251,9 @@ struct ContentView: View {
     
     init() {
         setenv("LC_HOME_PATH", getenv("HOME"), 1)
+        #if os(iOS)
         init_bypassDyldLibValidation()
+        #endif
     }
     
     var body: some View {
@@ -282,7 +284,7 @@ struct ContentView: View {
                     }
                 }
                 
-                // Terminal input area
+                #if os(iOS)
                 HStack {
                     Text("›")
                         .font(.system(.body, design: .monospaced))
@@ -301,13 +303,32 @@ struct ContentView: View {
                 .padding(8)
                 .background(Color.black)
                 .overlay(Rectangle().frame(height: 1).foregroundColor(.gray), alignment: .top)
+                #else
+                HStack {
+                    Text("›")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.green)
+                    TextField("", text: $inputText)
+                        .onSubmit {
+                            sendInput()
+                        }
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.green)
+                        .background(Color.clear)
+                        .disableAutocorrection(true)
+                }
+                .padding(8)
+                .background(Color.black)
+                .overlay(Rectangle().frame(height: 1).foregroundColor(.gray), alignment: .top)
+                #endif
             }
             
             Button(action: {
                 runner.stop()
                 LogCapture.shared.stopCapturing()
                 logsModel.clearLogs()
-                // currentBinaryPath = nil
+                currentBinaryPath = nil
             }) {
                 Text("Exit")
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
@@ -376,11 +397,13 @@ struct ContentView: View {
             return
         }
         
+        
         [
             ("/usr/lib/libpcre.0.dylib", "@rpath/libpcre.1.dylib"),
             ("/opt/homebrew/opt/pcre2/lib/libpcre2-32.0.dylib", "@rpath/libpcre.1.dylib"),
             ("/opt/homebrew/opt/ncurses/lib/libncursesw.6.dylib", "@rpath/libncursesw.6.dylib"),
             ("/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation", "/System/Library/Frameworks/Foundation.framework/Foundation"),
+            ("/System/Library/Frameworks/CryptoKit.framework/Versions/A/CryptoKit", "/System/Library/Frameworks/CryptoKit.framework/CryptoKit"),
             ("/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation", "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"),
             ("/System/Library/Frameworks/Security.framework/Versions/A/Security", "/System/Library/Frameworks/Security.framework/Security"),
             ("/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation", "/System/Library/Frameworks/AVFoundation.framework/AVFoundation"),
