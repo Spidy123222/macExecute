@@ -41,7 +41,6 @@ func parseMachO(path: UnsafePointer<CChar>, callback: ParseMachOCallback) -> Str
     let magic = map.load(as: UInt32.self)
     
     if magic == FAT_CIGAM {
-        // Find compatible slice
         let header = map.bindMemory(to: fat_header.self, capacity: 1)
         var arch = (map + MemoryLayout<fat_header>.size).bindMemory(to: fat_arch.self, capacity: 1)
         
@@ -70,24 +69,20 @@ func parseMachO(path: UnsafePointer<CChar>, callback: ParseMachOCallback) -> Str
 
 @discardableResult
 func replacePatternInFile(at filePath: String, pattern: String, replacement: String) -> Bool {
-    // Check if the file exists
     if !FileManager.default.fileExists(atPath: filePath) {
         print("File does not exist at path: \(filePath)")
         return false
     }
     
     do {
-        // Read the binary file content as Data
         let fileData = try Data(contentsOf: URL(fileURLWithPath: filePath))
         
-        // Convert the pattern and replacement strings to Data using UTF-8 encoding
         guard let patternData = pattern.data(using: .utf8),
               let replacementData = replacement.data(using: .utf8) else {
             print("Failed to convert strings to data.")
             return false
         }
         
-        // Create a mutable copy of the file data
         var modifiedData = fileData
         
         // Find all occurrences of the pattern
@@ -96,19 +91,15 @@ func replacePatternInFile(at filePath: String, pattern: String, replacement: Str
             let patternLength = range.upperBound - range.lowerBound
             let replacementLength = replacementData.count
             
-            // If the replacement is shorter, pad with zeroes (to maintain the structure like a Mach-O file)
             if replacementLength < patternLength {
                 modifiedData.replaceSubrange(range, with: replacementData + Data(repeating: 0, count: patternLength - replacementLength))
             } else {
-                // If the replacement is longer, just replace it (you'll need to handle Mach-O specifics here)
                 modifiedData.replaceSubrange(range, with: replacementData)
             }
             
-            // Move to the next part of the data
             currentIndex = range.upperBound
         }
         
-        // Write the modified binary data back to the file
         try modifiedData.write(to: URL(fileURLWithPath: filePath))
         print("File successfully modified.")
         return true
@@ -118,8 +109,8 @@ func replacePatternInFile(at filePath: String, pattern: String, replacement: Str
     }
 }
 
-
-func patchMachO(path: String) {
+@discardableResult
+func patchMachO(path: String) -> String? {
     var has64bitSlice = false
     
     let error = parseMachO(path: path.cString(using: .utf8)!) { path, header, fd, filePtr in
@@ -128,6 +119,8 @@ func patchMachO(path: String) {
             patchExecSlice(path: path, header: header, doInject: true)
         }
     }
+    print(has64bitSlice)
+    return error
 }
 
 
